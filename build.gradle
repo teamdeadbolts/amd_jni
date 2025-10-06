@@ -7,25 +7,27 @@
 
 plugins {
 	id "java"
+  id "maven-publish"
 	id 'edu.wpi.first.WpilibTools' version '2.1.0'
 	id "com.diffplug.spotless" version "7.0.1"
 	id "edu.wpi.first.GradleRIO" version "2025.3.2"
 }
 
+group = 'org.teamdeadbolts'
+version = '0.0.1-DEV'
+
 allprojects {
-repositories {
-	// Use Maven Central for resolving dependencies.
-	mavenCentral()
-}
+  repositories {
+    // Use Maven Central for resolving dependencies.
+    mavenCentral()
+    mavenLocal()
+  }
 }
 
 ext {
-// pubVersion = versionString
-// isDev = pubVersion.startsWith("dev")
-
-wpilibVersion = "2025.3.2"
-wpimathVersion = wpilibVersion
-openCVversion = "4.10.0-3"
+  wpilibVersion = "2025.3.2"
+  wpimathVersion = wpilibVersion
+  openCVversion = "4.10.0-3"
 }
 
 
@@ -35,25 +37,28 @@ wpi.getVersions().getWpimathVersion().convention(wpimathVersion);
 wpilibTools.deps.wpilibVersion = wpilibVersion
 
 java {
-sourceCompatibility = JavaVersion.VERSION_21
-targetCompatibility = JavaVersion.VERSION_21
+  sourceCompatibility = JavaVersion.VERSION_21
+  targetCompatibility = JavaVersion.VERSION_21
 
-toolchain {
-	languageVersion = JavaLanguageVersion.of(21)
-}
+  toolchain {
+    languageVersion = JavaLanguageVersion.of(21)
+  }
 }
 
 dependencies {
 	implementation wpilibTools.deps.wpilibJava("wpiutil")
 	implementation wpilibTools.deps.wpilibOpenCvJava("frc" + wpi.frcYear.get(), wpi.versions.opencvVersion.get())
-	// Use JUnit Jupiter for testing.
-	testImplementation libs.junit.jupiter
-
+	
+  testImplementation libs.junit.jupiter
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-
-	// This dependency is used by the application.
-	implementation libs.guava
 }
+
+
+ext.nativeName = wpilibTools.platformMapper.currentPlatform.platformName;
+
+ext.outputsFolder = file("$buildDir/outputs");
+
+println("Building for platform $nativeName");
 
 tasks.named('test') {
 	useJUnitPlatform()
@@ -72,24 +77,22 @@ tasks.named('test') {
 }
 
 
-ext.nativeName = wpilibTools.platformMapper.currentPlatform.platformName;
-
-ext.outputsFolder = file("$buildDir/outputs");
-
-println("Building for platform $nativeName");
+tasks.register('buildNative', Exec) {
+  workingDir "$projectDir"
+  commandLine 'cmake', '--build', 'cmake_build'
+}
 
 tasks.register('copyNative', Copy) {
-from "$projectDir/cmake_build"
-into "$outputsFolder/nativelibraries/$nativeName"
-include "*.so"
+  dependsOn buildNative
+  from "$projectDir/cmake_build"
+  into "$outputsFolder/nativelibraries/$nativeName"
+  include "*.so"
 
-eachFile {
-	println("Copying native library: $name");
-	path = name;
-}
-includeEmptyDirs = false
-build.dependsOn it
-test.dependsOn it
+  eachFile {
+    println("Copying native library: $name");
+    path = name;
+  }
+  includeEmptyDirs = false
 }
 
 tasks.register("generateJniHeaders", JavaCompile) {
@@ -107,6 +110,9 @@ tasks.register("generateJniHeaders", JavaCompile) {
 	]
 }
 
+build.dependsOn copyNative
+test.dependsOn copyNative
+
 def nativeConfigName = "wpilibNatives"
 def nativeConfig = configurations.create(nativeConfigName)
 
@@ -114,9 +120,73 @@ def nativeTasks = wpilibTools.createExtractionTasks {
 configurationName = nativeConfigName
 }
 
+jar {
+  dependsOn copyNative
+
+  from("$outputsFolder/nativelibraries/$nativeName") {
+    into "nativelibraries/$nativeName"
+  }
+
+  manifest {
+    attributes(
+      'Implementation-Title': 'AMD JNI',
+      'Implementation-Version': version,
+      'Native-Platform': nativeName,
+    )
+  }
+}
+
+publishing {
+  publications {
+    maven(MavenPublication) {
+      from components.java
+
+      groupId = 'org.teamdeadbolts'
+      artifactId = "amd_jni-${nativeName}"
+      version = project.version
+
+      pom {
+        name = 'AMD JNI'
+        description = 'Java bindings for AMD object detection library'
+        url = 'https://github.com/teamdeadbolts/amd_jni'
+
+        licenses {
+          license {
+            name = 'The MIT License'
+            url = 'https://opensource.org/license/mit/'
+          }
+        }
+
+        developers {
+          developer {
+            id = 'totaltaxamount'
+            name = 'TotalTaxAmount'
+          }
+        }
+      }
+    }
+  }
+
+  repositories {
+    // maven {
+    //   name = 'Local'
+    //   url = mavenLocal().url
+    // }
+
+    maven {
+      name = 'GitHubPackages'
+      url = uri('https://maven.pkg.github.com/teamdeadbolts/amd_jni')
+      credentials {
+        username = System.getenv("GITHUB_ACTOR");
+        password = System.getenv("GITHUB_TOKEN");
+      }
+    }
+  }
+}
+
 spotless {
 	format 'misc', {
-		target '*.gradle', '.gitignore', '*.json'
+		target '.gitignore', '*.json'
 
 		trimTrailingWhitespace()
 		leadingSpacesToTabs()
