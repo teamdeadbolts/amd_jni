@@ -1,9 +1,12 @@
 #include "detector.h"
 
 #include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <iostream>
 #include <opencv2/imgproc.hpp>
+
+#include "yolo.h"
 
 Detector::Detector(const std::string& model_path, int numClasses,
                    int modelVersion, int deviceMask)
@@ -11,22 +14,18 @@ Detector::Detector(const std::string& model_path, int numClasses,
       numClasses(numClasses),
       modelVersion(modelVersion),
       deviceMask(deviceMask) {
-  //  static std::ofstream logFile("detector_debug.log", std::ios::app);
-  //   std::cout.rdbuf(logFile.rdbuf());
-
   session_options.SetIntraOpNumThreads(1);
   session_options.SetInterOpNumThreads(1);
   session_options.SetGraphOptimizationLevel(
       GraphOptimizationLevel::ORT_ENABLE_ALL);
 
   // Device selection based on mask
-  if (deviceMask & 0x01) {         // CPU
-                                   // Default provider
-  } else if (deviceMask & 0x02) {  // GPU (CUDA if available)
-                                   // OrtCUDAProviderOptions cuda_options;
-    // session_options.AppendExecutionProvider_CUDA(cuda_options);
-  } else if (deviceMask & 0x04) {  // NPU/VitisAI
-    // session_options.AppendExecutionProvider("VitisAI");
+  if (deviceMask & 0x01) {
+  } else if (deviceMask & 0x02) {
+    OrtROCMProviderOptions rocm_options;
+    session_options.AppendExecutionProvider_ROCM(rocm_options);
+  } else if (deviceMask & 0x04) {
+    session_options.AppendExecutionProvider("VitisAI");
   }
 
   session =
@@ -159,146 +158,15 @@ std::vector<DetectionBox> Detector::parseOutputAndNMS(Ort::Value& output,
   std::vector<DetectionBox> detections;
 
   if (modelVersion == 0) {  // YOLOv5
-    std::cout << "Using YOLOv5 parser..." << std::endl;
-    detections =
-        parseYOLOv5Output(output, origW, origH, inputW, inputH, boxThresh);
-  } else {  // YOLOv8/v11
-    std::cout << "Using YOLOv8/v11 parser..." << std::endl;
-    detections =
-        parseYOLOv8Output(output, origW, origH, inputW, inputH, boxThresh);
+    detections = parseYOLOv5Output(output, origW, origH, inputW, inputH,
+                                   numClasses, boxThresh);
+  } else {
+    detections = parseYOLOv8Output(output, origW, origH, inputW, inputH,
+                                   numClasses, boxThresh);
   }
 
   auto result = applyNMS(detections, nmsThresh);
   return result;
-}
-
-std::vector<DetectionBox> Detector::parseYOLOv5Output(Ort::Value& output,
-                                                      int origW, int origH,
-                                                      int inputW, int inputH,
-                                                      float boxThresh) {
-  std::vector<DetectionBox> boxes;
-  auto shape = output.GetTensorTypeAndShapeInfo().GetShape();
-  auto outputType = output.GetTensorTypeAndShapeInfo().GetElementType();
-
-  // YOLOv5 format: [1, num_anchors, 5+num_classes]
-  int numBoxes = shape[1];
-  int boxDim = shape[2];
-
-  float scaleX = (float)origW / inputW;
-  float scaleY = (float)origH / inputH;
-
-  if (outputType == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16) {
-    // Handle float16 output
-    Ort::Float16_t* outputData = output.GetTensorMutableData<Ort::Float16_t>();
-
-    for (int i = 0; i < numBoxes; i++) {
-      Ort::Float16_t* box = outputData + i * boxDim;
-      float objectness = static_cast<float>(box[4]);
-
-      if (objectness < boxThresh) continue;
-
-      // Find best class
-      int bestClass = 0;
-      float bestScore = 0;
-      for (int c = 0; c < numClasses; c++) {
-        float score = static_cast<float>(box[5 + c]) * objectness;
-        if (score > bestScore) {
-          bestScore = score;
-          bestClass = c;
-        }
-      }
-
-      if (bestScore < boxThresh) continue;
-
-      DetectionBox det;
-      det.x = static_cast<float>(box[0]) * scaleX;
-      det.y = static_cast<float>(box[1]) * scaleY;
-      det.w = static_cast<float>(box[2]) * scaleX;
-      det.h = static_cast<float>(box[3]) * scaleY;
-      det.confidence = bestScore;
-      det.classId = bestClass;
-
-      boxes.push_back(det);
-    }
-  } else {
-    // Handle float32 output (original code)
-    float* outputData = output.GetTensorMutableData<float>();
-
-    for (int i = 0; i < numBoxes; i++) {
-      float* box = outputData + i * boxDim;
-      float objectness = box[4];
-
-      if (objectness < boxThresh) continue;
-
-      // Find best class
-      int bestClass = 0;
-      float bestScore = 0;
-      for (int c = 0; c < numClasses; c++) {
-        float score = box[5 + c] * objectness;
-        if (score > bestScore) {
-          bestScore = score;
-          bestClass = c;
-        }
-      }
-
-      if (bestScore < boxThresh) continue;
-
-      DetectionBox det;
-      det.x = box[0] * scaleX;
-      det.y = box[1] * scaleY;
-      det.w = box[2] * scaleX;
-      det.h = box[3] * scaleY;
-      det.confidence = bestScore;
-      det.classId = bestClass;
-
-      boxes.push_back(det);
-    }
-  }
-
-  return boxes;
-}
-
-std::vector<DetectionBox> Detector::parseYOLOv8Output(Ort::Value& output,
-                                                      int origW, int origH,
-                                                      int inputW, int inputH,
-                                                      float boxThresh) {
-  std::vector<DetectionBox> boxes;
-  float* outputData = output.GetTensorMutableData<float>();
-  auto shape = output.GetTensorTypeAndShapeInfo().GetShape();
-
-  // YOLOv8 format: [1, 4+num_classes, num_anchors]
-  int boxDim = shape[1];
-  int numBoxes = shape[2];
-
-  float scaleX = (float)origW / inputW;
-  float scaleY = (float)origH / inputH;
-
-  for (int i = 0; i < numBoxes; i++) {
-    // Find best class
-    int bestClass = 0;
-    float bestScore = 0;
-    for (int c = 0; c < numClasses; c++) {
-      float score = outputData[(4 + c) * numBoxes + i];
-      if (score > bestScore) {
-        bestScore = score;
-        bestClass = c;
-      }
-    }
-
-    if (bestScore < boxThresh) continue;
-
-    DetectionBox det;
-    det.x = outputData[0 * numBoxes + i] * scaleX;
-    det.y = outputData[1 * numBoxes + i] * scaleY;
-    det.w = outputData[2 * numBoxes + i] * scaleX;
-    det.h = outputData[3 * numBoxes + i] * scaleY;
-    det.confidence = bestScore;
-    det.classId = bestClass;
-
-    boxes.push_back(det);
-  }
-
-  return boxes;
 }
 
 std::vector<DetectionBox> Detector::applyNMS(std::vector<DetectionBox>& boxes,
@@ -356,7 +224,32 @@ bool Detector::isQuantized() const {
   }
 }
 
-void Detector::setDevice(int deviceMask) {
-  this->deviceMask = deviceMask;
-  // Note: Changing device at runtime requires recreating the session
+void Detector::setDevice(int deviceMask) { this->deviceMask = deviceMask; }
+
+static inline float convertFloat16(Ort::Float16_t val) {
+  uint16_t u = *reinterpret_cast<uint16_t*>(&val);
+  uint16_t sign = (u >> 15) & 1;
+  uint16_t exp = (u >> 10) & 0x1F;
+  uint16_t frac = u & 0x3FF;
+
+  if (exp == 0) {
+    if (frac == 0) return sign ? -0.0f : 0.0f;
+    return std::ldexp(static_cast<float>(frac), -24) * (sign ? -1.0f : 1.0f);
+  } else if (exp == 31) {
+    if (frac == 0) return sign ? -INFINITY : INFINITY;
+    return NAN;
+  }
+
+  return std::ldexp(static_cast<float>(frac) / 1024.0f + 1.0f, exp - 15) *
+         (sign ? -1.0f : 1.0f);
+}
+
+static inline float getFloat(const void* data, size_t idx, bool isFloat16) {
+  if (isFloat16) {
+    auto ptr = reinterpret_cast<const Ort::Float16_t*>(data);
+    return convertFloat16(ptr[idx]);
+  } else {
+    auto ptr = reinterpret_cast<const float*>(data);
+    return ptr[idx];
+  }
 }

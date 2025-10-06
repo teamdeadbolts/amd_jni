@@ -1,6 +1,4 @@
-#ifndef DETECTOR_H
-#define DETECTOR_H
-
+#pragma once
 #include <onnxruntime_cxx_api.h>
 
 #include <memory>
@@ -8,11 +6,7 @@
 #include <string>
 #include <vector>
 
-struct DetectionBox {
-  float x, y, w, h;
-  float confidence;
-  int classId;
-};
+#include "yolo.h"
 
 class Detector {
  public:
@@ -45,20 +39,11 @@ class Detector {
   std::vector<int64_t> inputShape;
   std::vector<int64_t> outputShape;
 
-  std::vector<DetectionBox> parseYOLOv5Output(Ort::Value& output, int origW,
-                                              int origH, int inputW, int inputH,
-                                              float boxThresh);
-  std::vector<DetectionBox> parseYOLOv8Output(Ort::Value& output, int origW,
-                                              int origH, int inputW, int inputH,
-                                              float boxThresh);
   std::vector<DetectionBox> applyNMS(std::vector<DetectionBox>& boxes,
                                      float nmsThresh);
-  float calculateIOU(const DetectionBox& a, const DetectionBox& b);
-
- private:
   std::vector<DetectionBox> parseOutputAndNMS(Ort::Value& output, int origW,
                                               int origH, int inputW, int inputH,
                                               float nmsThresh, float boxThresh);
-};
 
-#endif
+  float calculateIOU(const DetectionBox& a, const DetectionBox& b);
+};

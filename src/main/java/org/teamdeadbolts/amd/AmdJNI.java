@@ -11,6 +11,30 @@ public class AmdJNI {
         YOLO_V11
     }
 
+    public static enum DeviceMask {
+        CPU(0),
+        GPU(1),
+        NPU(2);
+
+        private final int value;
+
+        DeviceMask(int value) {
+            this.value = value;
+        }
+
+        public int getValue() {
+            return value;
+        }
+
+        public int of(DeviceMask... masks) {
+            int combined = 0;
+            for (DeviceMask mask : masks) {
+                combined |= mask.getValue();
+            }
+            return combined;
+        }
+    }
+
     public static class AmdResult {
         public final Rect2d rect;
         final float conf;
