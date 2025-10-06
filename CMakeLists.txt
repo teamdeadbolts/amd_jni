@@ -69,6 +69,8 @@ message("Depending on OpenCV ${OPENCV_LIB_PATH}")
 add_library(
     ${PROJECT_NAME}
     src/main/native/cpp/amd_jni.cpp
+    src/main/native/cpp/detector.cpp
+    src/main/native/include/detector.h
     # src/main/native/cpp/yolo_common.cpp
     # src/main/native/cpp/preprocess.cc
     # src/main/native/cpp/postprocess.cc

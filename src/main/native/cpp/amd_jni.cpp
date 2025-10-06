@@ -1,97 +1,162 @@
 #include "org_teamdeadbolts_amd_AmdJNI.h"
-#include <string>
+#include "detector.h"
 #include <vector>
 #include <memory>
 #include <opencv2/core.hpp>
-#include <opencv2/imgproc.hpp>
-#include <onnxruntime_cxx_api.h>
 
-struct Detector {
-  Ort::Env env;
-  Ort::SessionOptions session_options;
-  std::unique_ptr<Ort::Session> session;
-
-  Detector(const std::string &model_path, int modelVer, int deviceMask) : env(ORT_LOGGING_LEVEL_INFO, "AMDJNI") {
-    session_options.SetInterOpNumThreads(1);
-    // TOOD: Device mask stuff
-
-    session = std::make_unique<Ort::Session>(env, model_path.c_str(), session_options);
-  }
-};
-
+// Global detector storage
 std::vector<std::unique_ptr<Detector>> detectors;
 
-
-// ---------------- JNI Methods ----------------
-
 extern "C" {
-  JNIEXPORT jlong JNICALL Java_org_teamdeadbolts_amd_AmdJNI_create
+
+JNIEXPORT jlong JNICALL Java_org_teamdeadbolts_amd_AmdJNI_create
     (JNIEnv *env, jclass clazz, jstring modelPath, jint numClasses, jint modelVer, jint deviceMask)
-  {
-      const char* pathCStr = env->GetStringUTFChars(modelPath, nullptr);
-      if (!pathCStr) return 0;
+{
+    const char* pathCStr = env->GetStringUTFChars(modelPath, nullptr);
+    if (!pathCStr) {
+        return 0;
+    }
 
-      try {
-          auto detector = std::make_unique<Detector>(pathCStr, modelVer, deviceMask);
-          detectors.push_back(std::move(detector));
-          env->ReleaseStringUTFChars(modelPath, pathCStr);
+    try {
+        auto detector = std::make_unique<Detector>(pathCStr, numClasses, modelVer, deviceMask);
+        detectors.push_back(std::move(detector));
+        env->ReleaseStringUTFChars(modelPath, pathCStr);
 
-          // Return index as "pointer" (simplified)
-          return static_cast<jlong>(detectors.size() - 1);
-      } catch (...) {
-          env->ReleaseStringUTFChars(modelPath, pathCStr);
-          return 0;
-      }
-  }
+        return static_cast<jlong>(detectors.size() - 1);
+    } catch (const std::exception& e) {
+        env->ReleaseStringUTFChars(modelPath, pathCStr);
+        
+        // Optionally throw Java exception with error message
+        jclass exceptionClass = env->FindClass("java/lang/RuntimeException");
+        if (exceptionClass) {
+            env->ThrowNew(exceptionClass, e.what());
+        }
+        
+        return 0;
+    }
+}
 
-  /*
-  * Class:     org_teamdeadbolts_amd_AmdJNI
-  * Method:    setDevice
-  */
-  JNIEXPORT jint JNICALL Java_org_teamdeadbolts_amd_AmdJNI_setDevice
+JNIEXPORT jint JNICALL Java_org_teamdeadbolts_amd_AmdJNI_setDevice
     (JNIEnv *env, jclass clazz, jlong ptr, jint desiredDevice)
-  {
-      // TODO: implement GPU/NPU switching
-      // For now, just return success
-      return 0;
-  }
+{
+    if (ptr < 0 || ptr >= (jlong)detectors.size() || !detectors[ptr]) {
+        return -1;
+    }
+    
+    try {
+        detectors[ptr]->setDevice(desiredDevice);
+        return 0;
+    } catch (...) {
+        return -1;
+    }
+}
 
-  /*
-  * Class:     org_teamdeadbolts_amd_AmdJNI
-  * Method:    destroy
-  */
-  JNIEXPORT void JNICALL Java_org_teamdeadbolts_amd_AmdJNI_destroy
-    (JNIEnv *, jclass, jlong ptr)
-  {
+JNIEXPORT void JNICALL Java_org_teamdeadbolts_amd_AmdJNI_destroy
+    (JNIEnv *env, jclass clazz, jlong ptr)
+{
     if (ptr >= 0 && ptr < (jlong)detectors.size()) {
         detectors[ptr].reset();
     }
-  }
-
-  /*
-  * Class:     org_teamdeadbolts_amd_AmdJNI
-  * Method:    detect
-  */
-  JNIEXPORT jobjectArray JNICALL Java_org_teamdeadbolts_amd_AmdJNI_detect
-    (JNIEnv *env, jclass clazz, jlong ptr, jlong imagePtr, jdouble nmsThresh, jdouble boxThresh)
-  {
-      // TODO: Replace with real ONNX inference
-      // For now, return empty array of AmdResult
-      jclass amdResultClass = env->FindClass("org/teamdeadbolts/amd/AmdJNI$AmdResult");
-      if (!amdResultClass) return nullptr;
-
-      jobjectArray resultArray = env->NewObjectArray(0, amdResultClass, nullptr);
-      return resultArray;
-  }
-
-  /*
-  * Class:     org_teamdeadbolts_amd_AmdJNI
-  * Method:    isQuantized
-  */
-  JNIEXPORT jboolean JNICALL Java_org_teamdeadbolts_amd_AmdJNI_isQuantized
-    (JNIEnv *env, jclass clazz, jlong ptr)
-  {
-      // TODO: implement real quantization detection
-      return JNI_FALSE;
-  }
 }
+
+JNIEXPORT jobjectArray JNICALL Java_org_teamdeadbolts_amd_AmdJNI_detect
+    (JNIEnv *env, jclass clazz, jlong ptr, jlong imagePtr, jdouble nmsThresh, jdouble boxThresh)
+{
+    // Validate detector pointer
+    if (ptr < 0 || ptr >= (jlong)detectors.size() || !detectors[ptr]) {
+        jclass exceptionClass = env->FindClass("java/lang/RuntimeException");
+        if (exceptionClass) {
+            env->ThrowNew(exceptionClass, "Invalid detector pointer");
+        }
+        return nullptr;
+    }
+    
+    // Validate image pointer
+    if (imagePtr == 0) {
+        jclass exceptionClass = env->FindClass("java/lang/RuntimeException");
+        if (exceptionClass) {
+            env->ThrowNew(exceptionClass, "Invalid image pointer");
+        }
+        return nullptr;
+    }
+    
+    cv::Mat* image = reinterpret_cast<cv::Mat*>(imagePtr);
+    
+    try {
+        // Run inference
+        std::vector<DetectionBox> results = detectors[ptr]->detect(
+            *image, 
+            (float)nmsThresh, 
+            (float)boxThresh
+        );
+        
+        // Find AmdResult class and constructor
+        jclass amdResultClass = env->FindClass("org/teamdeadbolts/amd/AmdJNI$AmdResult");
+        if (!amdResultClass) {
+            return nullptr;
+        }
+        
+        jmethodID constructor = env->GetMethodID(amdResultClass, "<init>", "(IIIIFI)V");
+        if (!constructor) {
+            return nullptr;
+        }
+        
+        // Create result array
+        jobjectArray resultArray = env->NewObjectArray(results.size(), amdResultClass, nullptr);
+        if (!resultArray) {
+            return nullptr;
+        }
+        
+        // Populate array with detections
+        for (size_t i = 0; i < results.size(); i++) {
+            const auto& det = results[i];
+            
+            // Convert center-width format to left-top-right-bottom
+            int left = (int)(det.x - det.w / 2);
+            int top = (int)(det.y - det.h / 2);
+            int right = (int)(det.x + det.w / 2);
+            int bottom = (int)(det.y + det.h / 2);
+            
+            // Create AmdResult object
+            jobject resultObj = env->NewObject(
+                amdResultClass, 
+                constructor,
+                left, top, right, bottom,
+                det.confidence, 
+                det.classId
+            );
+            
+            if (!resultObj) {
+                continue; // Skip this detection if creation failed
+            }
+            
+            env->SetObjectArrayElement(resultArray, i, resultObj);
+            env->DeleteLocalRef(resultObj);
+        }
+        
+        return resultArray;
+        
+    } catch (const std::exception& e) {
+        jclass exceptionClass = env->FindClass("java/lang/RuntimeException");
+        if (exceptionClass) {
+            env->ThrowNew(exceptionClass, e.what());
+        }
+        return nullptr;
+    }
+}
+
+JNIEXPORT jboolean JNICALL Java_org_teamdeadbolts_amd_AmdJNI_isQuantized
+    (JNIEnv *env, jclass clazz, jlong ptr)
+{
+    if (ptr < 0 || ptr >= (jlong)detectors.size() || !detectors[ptr]) {
+        return JNI_FALSE;
+    }
+    
+    try {
+        return detectors[ptr]->isQuantized() ? JNI_TRUE : JNI_FALSE;
+    } catch (...) {
+        return JNI_FALSE;
+    }
+}
+
+} // extern "C"

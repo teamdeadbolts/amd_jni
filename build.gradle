@@ -7,9 +7,9 @@
 
 plugins {
     id "java"
-    id 'edu.wpi.first.WpilibTools' version '1.3.0'
+    id 'edu.wpi.first.WpilibTools' version '2.1.0'
     id "com.diffplug.spotless" version "6.22.0"
-    id "edu.wpi.first.GradleRIO" version "2024.1.1"
+    id "edu.wpi.first.GradleRIO" version "2025.3.2"
 }
 
 allprojects {
@@ -23,9 +23,9 @@ ext {
   // pubVersion = versionString
   // isDev = pubVersion.startsWith("dev")
 
-  wpilibVersion = "2024.3.2"
+  wpilibVersion = "2025.3.2"
   wpimathVersion = wpilibVersion
-  openCVversion = "4.8.0-2"
+  openCVversion = "4.10.0-3"
 }
 
 
@@ -56,10 +56,21 @@ dependencies {
 }
 
 tasks.named('test') {
-    // Use JUnit Platform for unit tests.
     useJUnitPlatform()
-    systemProperty "java.library.path", "$buildDir/outputs/nativelibraries/$nativeName"
+
+    testLogging {
+        showStandardStreams = true
+    }
+
+    def parts = []
+    parts << "$buildDir/outputs/nativelibraries/$nativeName"
+    def ldPath = System.getenv("LD_LIBRARY_PATH")
+    if (ldPath != null) parts << ldPath
+    parts << System.getProperty("java.library.path")
+
+    systemProperty "java.library.path", parts.join(File.pathSeparator)
 }
+
 
 ext.nativeName = wpilibTools.platformMapper.currentPlatform.platformName;
 
@@ -78,6 +89,7 @@ tasks.register('copyNative', Copy) {
   }
   includeEmptyDirs = false
   build.dependsOn it
+  test.dependsOn it
 }
 
 tasks.register("generateJniHeaders", JavaCompile) {

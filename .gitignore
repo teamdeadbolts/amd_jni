@@ -8,3 +8,5 @@
 build
 # Ignore cmake build output directory
 cmake_build
+
+test_output

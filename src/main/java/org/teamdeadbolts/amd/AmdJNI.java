@@ -13,8 +13,8 @@ public class AmdJNI {
 
   public static class AmdResult {
     public final Rect2d rect;
-    private final float conf;
-    private final int classId;
+    final float conf;
+    final int classId;
 
     public AmdResult(int left, int top, int right, int bottom, float conf, int classId) {
       this.rect = new Rect2d(new Point(left, top), new Point(right, bottom));
@@ -49,6 +49,14 @@ public class AmdJNI {
       if (Float.floatToIntBits(conf) != Float.floatToIntBits(other.conf)) return false;
       if (classId != other.classId) return false;
       return true;
+    }
+
+    public float getConf() {
+      return conf;
+    }
+
+    public int getClassId() {
+      return classId;
     }
   }
 
