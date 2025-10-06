@@ -12,40 +12,43 @@ extern "C" {
  * Method:    create
  * Signature: (Ljava/lang/String;III)J
  */
-JNIEXPORT jlong JNICALL Java_org_teamdeadbolts_amd_AmdJNI_create
-  (JNIEnv *, jclass, jstring, jint, jint, jint);
+JNIEXPORT jlong JNICALL Java_org_teamdeadbolts_amd_AmdJNI_create(JNIEnv *,
+                                                                 jclass,
+                                                                 jstring, jint,
+                                                                 jint, jint);
 
 /*
  * Class:     org_teamdeadbolts_amd_AmdJNI
  * Method:    setDevice
  * Signature: (JI)I
  */
-JNIEXPORT jint JNICALL Java_org_teamdeadbolts_amd_AmdJNI_setDevice
-  (JNIEnv *, jclass, jlong, jint);
+JNIEXPORT jint JNICALL Java_org_teamdeadbolts_amd_AmdJNI_setDevice(JNIEnv *,
+                                                                   jclass,
+                                                                   jlong, jint);
 
 /*
  * Class:     org_teamdeadbolts_amd_AmdJNI
  * Method:    destroy
  * Signature: (J)V
  */
-JNIEXPORT void JNICALL Java_org_teamdeadbolts_amd_AmdJNI_destroy
-  (JNIEnv *, jclass, jlong);
+JNIEXPORT void JNICALL Java_org_teamdeadbolts_amd_AmdJNI_destroy(JNIEnv *,
+                                                                 jclass, jlong);
 
 /*
  * Class:     org_teamdeadbolts_amd_AmdJNI
  * Method:    detect
  * Signature: (JJDD)[Lorg/teamdeadbolts/amd/AmdJNI/AmdResult;
  */
-JNIEXPORT jobjectArray JNICALL Java_org_teamdeadbolts_amd_AmdJNI_detect
-  (JNIEnv *, jclass, jlong, jlong, jdouble, jdouble);
+JNIEXPORT jobjectArray JNICALL Java_org_teamdeadbolts_amd_AmdJNI_detect(
+    JNIEnv *, jclass, jlong, jlong, jdouble, jdouble);
 
 /*
  * Class:     org_teamdeadbolts_amd_AmdJNI
  * Method:    isQuantized
  * Signature: (J)Z
  */
-JNIEXPORT jboolean JNICALL Java_org_teamdeadbolts_amd_AmdJNI_isQuantized
-  (JNIEnv *, jclass, jlong);
+JNIEXPORT jboolean JNICALL
+Java_org_teamdeadbolts_amd_AmdJNI_isQuantized(JNIEnv *, jclass, jlong);
 
 #ifdef __cplusplus
 }

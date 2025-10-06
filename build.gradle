@@ -6,26 +6,26 @@
  */
 
 plugins {
-    id "java"
-    id 'edu.wpi.first.WpilibTools' version '2.1.0'
-    id "com.diffplug.spotless" version "6.22.0"
-    id "edu.wpi.first.GradleRIO" version "2025.3.2"
+	id "java"
+	id 'edu.wpi.first.WpilibTools' version '2.1.0'
+	id "com.diffplug.spotless" version "7.0.1"
+	id "edu.wpi.first.GradleRIO" version "2025.3.2"
 }
 
 allprojects {
-  repositories {
-      // Use Maven Central for resolving dependencies.
-      mavenCentral()
-  }
+repositories {
+	// Use Maven Central for resolving dependencies.
+	mavenCentral()
+}
 }
 
 ext {
-  // pubVersion = versionString
-  // isDev = pubVersion.startsWith("dev")
+// pubVersion = versionString
+// isDev = pubVersion.startsWith("dev")
 
-  wpilibVersion = "2025.3.2"
-  wpimathVersion = wpilibVersion
-  openCVversion = "4.10.0-3"
+wpilibVersion = "2025.3.2"
+wpimathVersion = wpilibVersion
+openCVversion = "4.10.0-3"
 }
 
 
@@ -35,40 +35,40 @@ wpi.getVersions().getWpimathVersion().convention(wpimathVersion);
 wpilibTools.deps.wpilibVersion = wpilibVersion
 
 java {
-  sourceCompatibility = JavaVersion.VERSION_21
-  targetCompatibility = JavaVersion.VERSION_21
+sourceCompatibility = JavaVersion.VERSION_21
+targetCompatibility = JavaVersion.VERSION_21
 
-  toolchain {
-    languageVersion = JavaLanguageVersion.of(21)
-  }
+toolchain {
+	languageVersion = JavaLanguageVersion.of(21)
+}
 }
 
 dependencies {
-    implementation wpilibTools.deps.wpilibJava("wpiutil")
-    implementation wpilibTools.deps.wpilibOpenCvJava("frc" + wpi.frcYear.get(), wpi.versions.opencvVersion.get())
-    // Use JUnit Jupiter for testing.
-    testImplementation libs.junit.jupiter
+	implementation wpilibTools.deps.wpilibJava("wpiutil")
+	implementation wpilibTools.deps.wpilibOpenCvJava("frc" + wpi.frcYear.get(), wpi.versions.opencvVersion.get())
+	// Use JUnit Jupiter for testing.
+	testImplementation libs.junit.jupiter
 
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
-    // This dependency is used by the application.
-    implementation libs.guava
+	// This dependency is used by the application.
+	implementation libs.guava
 }
 
 tasks.named('test') {
-    useJUnitPlatform()
+	useJUnitPlatform()
 
-    testLogging {
-        showStandardStreams = true
-    }
+	testLogging {
+		showStandardStreams = true
+	}
 
-    def parts = []
-    parts << "$buildDir/outputs/nativelibraries/$nativeName"
-    def ldPath = System.getenv("LD_LIBRARY_PATH")
-    if (ldPath != null) parts << ldPath
-    parts << System.getProperty("java.library.path")
+	def parts = []
+	parts << "$buildDir/outputs/nativelibraries/$nativeName"
+	def ldPath = System.getenv("LD_LIBRARY_PATH")
+	if (ldPath != null) parts << ldPath
+	parts << System.getProperty("java.library.path")
 
-    systemProperty "java.library.path", parts.join(File.pathSeparator)
+	systemProperty "java.library.path", parts.join(File.pathSeparator)
 }
 
 
@@ -79,37 +79,54 @@ ext.outputsFolder = file("$buildDir/outputs");
 println("Building for platform $nativeName");
 
 tasks.register('copyNative', Copy) {
-  from "$projectDir/cmake_build"
-  into "$outputsFolder/nativelibraries/$nativeName"
-  include "*.so"
+from "$projectDir/cmake_build"
+into "$outputsFolder/nativelibraries/$nativeName"
+include "*.so"
 
-  eachFile {
-    println("Copying native library: $name");
-    path = name;
-  }
-  includeEmptyDirs = false
-  build.dependsOn it
-  test.dependsOn it
+eachFile {
+	println("Copying native library: $name");
+	path = name;
+}
+includeEmptyDirs = false
+build.dependsOn it
+test.dependsOn it
 }
 
 tasks.register("generateJniHeaders", JavaCompile) {
-    group = "build"
-    description = "Generates JNI headers for AmdJNI"
+	group = "build"
+	description = "Generates JNI headers for AmdJNI"
 
-    source = fileTree("src/main/java") {
-        include "org/teamdeadbolts/amd/AmdJNI.java"
-    }
+	source = fileTree("src/main/java") {
+		include "org/teamdeadbolts/amd/AmdJNI.java"
+	}
 
-    classpath = sourceSets.main.compileClasspath
-    destinationDirectory = file("$buildDir/classes/java/main")
-    options.compilerArgs = [
-        "-h", "$projectDir/src/main/native/include"
-    ]
+	classpath = sourceSets.main.compileClasspath
+	destinationDirectory = file("$buildDir/classes/java/main")
+	options.compilerArgs = [
+		"-h", "$projectDir/src/main/native/include"
+	]
 }
 
 def nativeConfigName = "wpilibNatives"
 def nativeConfig = configurations.create(nativeConfigName)
 
 def nativeTasks = wpilibTools.createExtractionTasks {
-  configurationName = nativeConfigName
+configurationName = nativeConfigName
+}
+
+spotless {
+	format 'misc', {
+		target '*.gradle', '.gitignore', '*.json'
+
+		trimTrailingWhitespace()
+		leadingSpacesToTabs()
+		endWithNewline()
+	}
+
+	java {
+		googleJavaFormat('1.25.2').aosp().reflowLongStrings() // Google formatting is probably good
+		formatAnnotations()
+
+		licenseHeader '/* Team Deadbolts (C) $YEAR */'
+	}
 }

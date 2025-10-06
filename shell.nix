@@ -33,6 +33,7 @@ pkgs.mkShell {
     openjdk21
     cmake
     opencv4100
+    clang
   ];
   
   shellHook = ''
