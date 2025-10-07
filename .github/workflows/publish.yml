@@ -25,8 +25,15 @@ jobs:
       - name: Setup CMake
         uses: jwlawson/actions-setup-cmake@v2
       
+      - name: Build natives
+        run: |
+          mkdir -p cmake_build
+          cd cmake_build
+          cmake ..
+          cmake --build .
+      
       - name: Publish to GitHub Packages
-        run: mkdir cmake_build && ./gradlew publish
+        run: ./gradlew publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  
           GITHUB_ACTOR: ${{ github.actor }}   
