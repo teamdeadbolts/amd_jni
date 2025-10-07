@@ -14,7 +14,7 @@ plugins {
 }
 
 group = 'org.teamdeadbolts'
-version = '0.0.1-DEV'
+version = '0.0.2-dev'
 
 allprojects {
   repositories {
@@ -37,11 +37,11 @@ wpi.getVersions().getWpimathVersion().convention(wpimathVersion);
 wpilibTools.deps.wpilibVersion = wpilibVersion
 
 java {
-  sourceCompatibility = JavaVersion.VERSION_21
-  targetCompatibility = JavaVersion.VERSION_21
+  sourceCompatibility = JavaVersion.VERSION_17
+  targetCompatibility = JavaVersion.VERSION_17
 
   toolchain {
-    languageVersion = JavaLanguageVersion.of(21)
+    languageVersion = JavaLanguageVersion.of(17)
   }
 }
 

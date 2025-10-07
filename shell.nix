@@ -30,7 +30,7 @@ let
 in
 pkgs.mkShell {
   buildInputs = with pkgs; [
-    openjdk21
+    openjdk17
     cmake
     opencv4100
     clang
