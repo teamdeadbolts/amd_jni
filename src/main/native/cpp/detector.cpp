@@ -217,8 +217,10 @@ bool Detector::isQuantized() const {
     auto elementType = tensorInfo.GetElementType();
 
     // Check if model uses quantized types (int8, uint8)
+    // TODO: Remove float16 and add int8 and uint8 parsing
     return (elementType == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8 ||
-            elementType == ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8);
+            elementType == ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8 ||
+            elementType == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
   } catch (...) {
     return false;
   }

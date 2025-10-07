@@ -79,6 +79,8 @@ class AmdJNITest {
                         0x01 // CPU device
                         );
 
+        System.out.println("Detector pointer: " + detectorPtr);
+
         assertTrue(detectorPtr >= 0, "Detector pointer should be non-negative");
     }
 

@@ -15,7 +15,7 @@ JNIEXPORT jlong JNICALL Java_org_teamdeadbolts_amd_AmdJNI_create(
     jint modelVer, jint deviceMask) {
   const char* pathCStr = env->GetStringUTFChars(modelPath, nullptr);
   if (!pathCStr) {
-    return 0;
+    return -1;
   }
 
   try {
@@ -34,7 +34,7 @@ JNIEXPORT jlong JNICALL Java_org_teamdeadbolts_amd_AmdJNI_create(
       env->ThrowNew(exceptionClass, e.what());
     }
 
-    return 0;
+    return -2;
   }
 }
 
