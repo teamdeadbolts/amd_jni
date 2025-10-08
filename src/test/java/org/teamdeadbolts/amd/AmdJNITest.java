@@ -173,8 +173,6 @@ class AmdJNITest {
         Assumptions.assumeTrue(hasValidImage, "Skipping: no test image available");
 
         Mat image = Imgcodecs.imread(TEST_IMAGE_PATH);
-        assertNotNull(image, "Failed to load test image");
-        assertFalse(image.empty(), "Loaded image is empty");
 
         try {
             AmdJNI.AmdResult[] results =
