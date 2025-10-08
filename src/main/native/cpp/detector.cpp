@@ -25,7 +25,7 @@ Detector::Detector(const std::string& model_path, int numClasses,
     OrtROCMProviderOptions rocm_options;
     session_options.AppendExecutionProvider_ROCM(rocm_options);
   } else if (deviceMask & 0x04) {
-    session_options.AppendExecutionProvider("VitisAI");
+    session_options.AppendExecutionProvider_VitisAI();
   }
 
   session =
